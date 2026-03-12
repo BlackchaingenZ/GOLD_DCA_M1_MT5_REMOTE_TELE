@@ -13,8 +13,8 @@
 //========================
 // INPUT PARAMETERS
 //========================
-input string TelegramBotToken = "7517542394:AAG5jagAlH12nf-A6LNYlJqRT-Lt4AymTIE";
-input string TelegramChatID   = "@TRADEBOY_CHANNEL2";
+input string TelegramBotToken = "8576224138:AAHKrCggXS05BSOg1OOpcUjyJvrQD4nIeVg";
+input string TelegramChatID   = "@NGUYENEURO_PREMIUM";
 
 //========================
 // CONTROL TELEGRAM BOT
@@ -75,6 +75,8 @@ int Step_DCA;
 double Lot1;
 double Lot2;
 double Lot3;
+bool EA_PAUSE = false;
+
 // SIGNAL DENSITY MONITOR
 datetime SignalTimes[3];
 int SignalIndex = 0;
@@ -263,6 +265,11 @@ void RegisterSignal() {
 //========================
 void OnTick() {
    CheckControlTelegram();
+      if(EA_PAUSE)
+   {
+      Comment("EA STATUS: PAUSED");
+      return;
+   }
    double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    
@@ -464,7 +471,19 @@ void CheckControlTelegram()
       string id=StringSubstr(response,pos+11,10);
       LastUpdateID=(int)StringToInteger(id);
    }
+   // PAUSE EA
+if(StringFind(response,"/pause")>=0)
+{
+   EA_PAUSE = true;
+   SendControlTelegram("REMOTE: EA PAUSED");
+}
 
+// START EA
+if(StringFind(response,"/start")>=0)
+{
+   EA_PAUSE = false;
+   SendControlTelegram("REMOTE: EA STARTED");
+}
    // CLOSE ALL
    if(StringFind(response,"/cls")>=0)
    {
