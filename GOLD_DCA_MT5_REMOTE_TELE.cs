@@ -413,19 +413,21 @@ void CloseAllOrders()
 {
    for(int i=PositionsTotal()-1;i>=0;i--)
    {
-      ulong ticket=PositionGetTicket(i);
+      ulong ticket = PositionGetTicket(i);
 
       if(PositionSelectByTicket(ticket))
       {
-         if(PositionGetInteger(POSITION_MAGIC)==Magic &&
-            PositionGetString(POSITION_SYMBOL)==_Symbol)
+         if(PositionGetString(POSITION_SYMBOL)==_Symbol)
          {
-            trade.PositionClose(ticket);
+            bool result = trade.PositionClose(ticket);
+
+            if(!result)
+               Print("Close error: ",GetLastError());
          }
       }
    }
 
-   SendControlTelegram("REMOTE: All positions closed");
+   SendControlTelegram("REMOTE: Close all executed");
 }
 
 void CheckControlTelegram()
