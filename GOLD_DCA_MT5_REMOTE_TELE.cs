@@ -331,7 +331,13 @@ void OnTick() {
    if(!BlockBuyByTP && buyCount < MaxOrdersPerSide) {
       if(buyCount == 0) {
          if(curBuySig && !IsBuySignalUsed && (TimeCurrent() - LastBuyTime >= CooldownSeconds)) {
-            if(trade.Buy(Lot1, _Symbol, Ask, 0, 0, "BUY_L1")) { LastBuyTime = TimeCurrent(); IsBuySignalUsed = true; }
+            if(trade.Buy(Lot1, _Symbol, Ask, 0, 0, "BUY_L1")) { LastBuyTime = TimeCurrent(); IsBuySignalUsed = true;    string msg =
+   "OPEN BUY\n"
+   + _Symbol +
+   "\nPrice: " + DoubleToString(Ask,_Digits) +
+   "\nLot: " + DoubleToString(Lot1,2);
+
+   SendControlTelegram(msg); }
          }
       } else {
          if(Ask <= GetLastPrice(POSITION_TYPE_BUY) - Step_DCA * _Point) {
@@ -496,7 +502,7 @@ if(StringFind(response,"/start")>=0)
       Lot1=0.1;
       Lot2=0.2;
       Lot3=0.4;
-      SendControlTelegram("REMOTE LOT: 0.1 0.2 0.4");
+      SendControlTelegram("REMOTE LOT: 0.1 - 0.2 - 0.4");
    }
 
    if(StringFind(response,"/lot2")>=0)
@@ -504,15 +510,15 @@ if(StringFind(response,"/start")>=0)
       Lot1=0.2;
       Lot2=0.4;
       Lot3=0.8;
-      SendControlTelegram("REMOTE LOT: 0.2 0.4 0.8");
+      SendControlTelegram("REMOTE LOT: 0.2 - 0.4 - 0.8");
    }
 
-   if(StringFind(response,"/lot8")>=0)
+   if(StringFind(response,"/lot4")>=0)
    {
-      Lot1=0.8;
-      Lot2=1.6;
-      Lot3=3.2;
-      SendControlTelegram("REMOTE LOT: 0.8 1.6 3.2");
+      Lot1=0.4;
+      Lot2=0.8;
+      Lot3=1.6;
+      SendControlTelegram("REMOTE LOT: 0.4 - 0.8 - 1.6");
    }
 
    // SL
