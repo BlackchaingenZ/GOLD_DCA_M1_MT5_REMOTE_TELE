@@ -13,8 +13,8 @@
 //========================
 // INPUT PARAMETERS
 //========================
-input string TelegramBotToken = "8301073411:AAH_pCjr7wmq8reXWL-532hKOyUazJ5a_Dg";
-input string TelegramChatID   = "@REMOTEAZB1";
+input string TelegramBotToken = "8576224138:AAHKrCggXS05BSOg1OOpcUjyJvrQD4nIeVg";
+input string TelegramChatID   = "@NGUYENEURO_PREMIUM";
 
 //========================
 // CONTROL TELEGRAM BOT
@@ -67,6 +67,7 @@ bool BlockBuyByTP = false;
 bool BlockSellByTP = false;
 bool IsBuySignalUsed = false;
 bool IsSellSignalUsed = false;
+datetime LastTPCloseTime = 0;
 
 int TP_Point;
 int SL_Point;
@@ -76,8 +77,6 @@ double Lot1;
 double Lot2;
 double Lot3;
 bool EA_PAUSE = false;
-
-bool EA_FROZEN = false;
 
 // SIGNAL DENSITY MONITOR
 datetime SignalTimes[3];
@@ -266,11 +265,6 @@ void RegisterSignal() {
 // MAIN EXECUTION
 //========================
 void OnTick() {
-   if(EA_FROZEN)
-{
-   Comment("EA STATUS: FROZEN");
-   return;
-}
    CheckControlTelegram();
       if(EA_PAUSE)
    {
@@ -334,41 +328,80 @@ void OnTick() {
 
    if(!spreadOK || !atrOK) return;
 
-   // 4. XỬ LÝ BUY
-   if(!BlockBuyByTP && buyCount < MaxOrdersPerSide) {
-      if(buyCount == 0) {
-         if(curBuySig && !IsBuySignalUsed && (TimeCurrent() - LastBuyTime >= CooldownSeconds)) {
-            if(trade.Buy(Lot1, _Symbol, Ask, 0, 0, "BUY_L1")) { LastBuyTime = TimeCurrent(); IsBuySignalUsed = true;    string msg =
-   "OPEN BUY\n"
-   + _Symbol +
-   "\nPrice: " + DoubleToString(Ask,_Digits) +
-   "\nLot: " + DoubleToString(Lot1,2);
+//==============================
+// 4. XỬ LÝ BUY
+//==============================
+if(!BlockBuyByTP && buyCount < MaxOrdersPerSide)
+{
+   if(buyCount == 0)
+   {
+      if(curBuySig && !IsBuySignalUsed && (TimeCurrent() - LastBuyTime >= CooldownSeconds))
+      {
+         if(trade.Buy(Lot1, _Symbol, Ask, 0, 0, "BUY_L1"))
+         {
+            LastBuyTime = TimeCurrent();
+            IsBuySignalUsed = true;
 
-   SendControlTelegram(msg); }
-         }
-      } else {
-         if(Ask <= GetLastPrice(POSITION_TYPE_BUY) - Step_DCA * _Point) {
-            double lot = (buyCount == 1) ? Lot2 : Lot3;
-            if(trade.Buy(lot, _Symbol, Ask, 0, 0, "BUY_DCA")) LastBuyTime = TimeCurrent();
+            string msg =
+            "EA OPEN BUY\n"
+            "Symbol: " + _Symbol +
+            "\nPrice: " + DoubleToString(Ask,_Digits) +
+            "\nLot: " + DoubleToString(Lot1,2);
+
+            SendControlTelegram(msg);
          }
       }
    }
+   else
+   {
+      if(Ask <= GetLastPrice(POSITION_TYPE_BUY) - Step_DCA * _Point)
+      {
+         double lot = (buyCount == 1) ? Lot2 : Lot3;
 
-   // 5. XỬ LÝ SELL
-   if(!BlockSellByTP && sellCount < MaxOrdersPerSide) {
-      if(sellCount == 0) {
-         if(curSellSig && !IsSellSignalUsed && (TimeCurrent() - LastSellTime >= CooldownSeconds)) {
-            if(trade.Sell(Lot1, _Symbol, Bid, 0, 0, "SELL_L1")) { LastSellTime = TimeCurrent(); IsSellSignalUsed = true; }
-         }
-      } else {
-         if(Bid >= GetLastPrice(POSITION_TYPE_SELL) + Step_DCA * _Point) {
-            double lot = (sellCount == 1) ? Lot2 : Lot3;
-            if(trade.Sell(lot, _Symbol, Bid, 0, 0, "SELL_DCA")) LastSellTime = TimeCurrent();
+         if(trade.Buy(lot, _Symbol, Ask, 0, 0, "BUY_DCA"))
+            LastBuyTime = TimeCurrent();
+      }
+   }
+}
+
+//==============================
+// 5. XỬ LÝ SELL
+//==============================
+if(!BlockSellByTP && sellCount < MaxOrdersPerSide)
+{
+   if(sellCount == 0)
+   {
+      if(curSellSig && !IsSellSignalUsed && (TimeCurrent() - LastSellTime >= CooldownSeconds))
+      {
+         if(trade.Sell(Lot1, _Symbol, Bid, 0, 0, "SELL_L1"))
+         {
+            LastSellTime = TimeCurrent();
+            IsSellSignalUsed = true;
+
+            string msg =
+            "EA OPEN SELL\n"
+            "Symbol: " + _Symbol +
+            "\nPrice: " + DoubleToString(Bid,_Digits) +
+            "\nLot: " + DoubleToString(Lot1,2);
+
+            SendControlTelegram(msg);
          }
       }
    }
+   else
+   {
+      if(Bid >= GetLastPrice(POSITION_TYPE_SELL) + Step_DCA * _Point)
+      {
+         double lot = (sellCount == 1) ? Lot2 : Lot3;
 
-   ManageSLTP();
+         if(trade.Sell(lot, _Symbol, Bid, 0, 0, "SELL_DCA"))
+            LastSellTime = TimeCurrent();
+      }
+   }
+}
+
+ManageSLTP();
+CheckCycleTP();
 }
 
 void ManageSLTP() {
@@ -429,6 +462,59 @@ void ManageSLTP() {
    }
 }
 
+void CheckCycleTP()
+{
+   if(!HistorySelect(TimeCurrent()-300, TimeCurrent()))
+      return;
+
+   for(int i = HistoryDealsTotal()-1; i >= 0; i--)
+   {
+      ulong ticket = HistoryDealGetTicket(i);
+      if(ticket == 0) continue;
+
+      if(HistoryDealGetInteger(ticket, DEAL_MAGIC) != Magic) continue;
+      if(HistoryDealGetString(ticket, DEAL_SYMBOL) != _Symbol) continue;
+      if(HistoryDealGetInteger(ticket, DEAL_ENTRY) != DEAL_ENTRY_OUT) continue;
+
+      datetime dealTime = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
+      if(dealTime <= LastTPCloseTime) continue;
+
+      double profit = HistoryDealGetDouble(ticket, DEAL_PROFIT)
+                    + HistoryDealGetDouble(ticket, DEAL_SWAP)
+                    + HistoryDealGetDouble(ticket, DEAL_COMMISSION);
+
+      if(profit > 0)
+      {
+         ENUM_DEAL_TYPE dealType = (ENUM_DEAL_TYPE)HistoryDealGetInteger(ticket, DEAL_TYPE);
+         ENUM_POSITION_TYPE closeSide;
+
+         if(dealType == DEAL_TYPE_SELL)
+            closeSide = POSITION_TYPE_BUY;
+
+         if(dealType == DEAL_TYPE_BUY)
+            closeSide = POSITION_TYPE_SELL;
+
+         LastTPCloseTime = dealTime;
+
+         for(int j = PositionsTotal()-1; j >= 0; j--)
+         {
+            ulong posTicket = PositionGetTicket(j);
+
+            if(PositionSelectByTicket(posTicket))
+            {
+               if(PositionGetInteger(POSITION_MAGIC) == Magic &&
+                  PositionGetString(POSITION_SYMBOL) == _Symbol &&
+                  PositionGetInteger(POSITION_TYPE) == closeSide)
+               {
+                  trade.PositionClose(posTicket);
+               }
+            }
+         }
+
+         return;
+      }
+   }
+}
 void CloseAllOrders()
 {
    for(int i=PositionsTotal()-1;i>=0;i--)
@@ -452,19 +538,6 @@ void CloseAllOrders()
 
 void CheckControlTelegram()
 {
-   // FREEZE EA (ANTI THEFT)
-if(StringFind(response,"/freeze")>=0)
-{
-   EA_FROZEN = true;
-   CloseAllOrders();
-   SendControlTelegram("SECURITY: EA FROZEN - BOT LOCKED");
-}
-
-if(StringFind(response,"/undofreeze")>=0)
-{
-   EA_FROZEN = false;
-   SendControlTelegram("SECURITY: EA UNLOCKED");
-}
    if(ControlBotToken=="" || ControlChatID=="")
       return;
 
@@ -511,7 +584,7 @@ if(StringFind(response,"/start")>=0)
    SendControlTelegram("REMOTE: EA STARTED");
 }
    // CLOSE ALL
-   if(StringFind(response,"/closeall")>=0)
+   if(StringFind(response,"/cls")>=0)
    {
       CloseAllOrders();
    }
